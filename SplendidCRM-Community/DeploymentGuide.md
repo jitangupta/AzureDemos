@@ -48,35 +48,46 @@ This step provisions the Windows Server VM and automatically triggers the instal
     -   Creates a public IP address and a network interface for the VM.
     -   Attaches the VM to the `webapp` subnet created in the previous step.
     -   Enables Just-In-Time (JIT) access for RDP on port 3389 for enhanced security.
-    -   **Crucially, this template will also execute the PowerShell scripts in order.**
+    -   **Crucially, it uses the `CustomScriptExtension` to download and execute the PowerShell scripts from your specified GitHub repository.**
 
 **Command:**
 
-First, you need to get the ID of the subnet created in Step 1.
+First, you need the ID of the subnet from Step 1 and the URL to your scripts repository.
 
 ```bash
 # Get the subnet ID
 webappSubnetId=$(az network vnet subnet show --resource-group YourResourceGroupName --vnet-name SplendidCRM-vnet --name webapp --query id -o tsv)
 
+# !! IMPORTANT !!
+# Set this to the raw content URL of your scripts folder in GitHub.
+scriptsRepoUrl="https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts"
+
 # Deploy the VM
 az deployment group create \
     --resource-group YourResourceGroupName \
     --template-file templates/vm.json \
-    --parameters webappSubnetId=$webappSubnetId adminUsername=<YourAdminUsername> adminPassword=<YourSecurePassword>
+    --parameters webappSubnetId=$webappSubnetId \
+                 scriptsRepositoryUrl=$scriptsRepoUrl \
+                 adminUsername=<YourAdminUsername> \
+                 adminPassword=<YourSecurePassword>
 ```
 
 ## Automated Post-Deployment Scripts
 
-Once the `vm.json` template is deployed, the following scripts will run automatically on the newly created virtual machine. You do not need to run them manually.
+Once the `vm.json` template is deployed, the `CustomScriptExtension` downloads all the scripts and executes `run-all.ps1`. You do not need to run them manually.
 
-1.  **`scripts/install-iis-sql.ps1`**
+1.  **`scripts/run-all.ps1` (Entry Point)**
+    -   **Purpose:** Orchestrates the entire setup process.
+    -   **Actions:** Executes the following three scripts in order.
+
+2.  **`scripts/install-iis-sql.ps1`**
     -   **Purpose:** Sets up the server environment.
     -   **Actions:**
         -   Installs Internet Information Services (IIS).
         -   Installs ASP.NET 4.8 and required IIS features.
         -   Downloads and silently installs SQL Server 2019 Developer Edition.
 
-2.  **`scripts/deploy-app.ps1`**
+3.  **`scripts/deploy-app.ps1`**
     -   **Purpose:** Deploys the SplendidCRM application files.
     -   **Actions:**
         -   Downloads the latest version of SplendidCRM Community Edition from GitHub.
@@ -85,7 +96,7 @@ Once the `vm.json` template is deployed, the following scripts will run automati
         -   Copies the SplendidCRM files to `C:\inetpub\wwwroot`.
         -   Configures the IIS application pool to use .NET CLR Version `v4.0`.
 
-3.  **`scripts/load-db.ps1`**
+4.  **`scripts/load-db.ps1`**
     -   **Purpose:** Creates and populates the application database.
     -   **Actions:**
         -   Creates a new database named `SplendidCRM`.

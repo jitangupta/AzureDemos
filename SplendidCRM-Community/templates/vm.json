@@ -41,6 +41,12 @@
       "metadata": {
         "description": "Specifies the ID of the web application subnet."
       }
+    },
+    "scriptsRepositoryUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "The base URL of the GitHub repository where the scripts are stored (e.g., https://raw.githubusercontent.com/YourUser/YourRepo/main/scripts)."
+      }
     }
   },
   "variables": {
@@ -164,6 +170,32 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2021-11-01",
+      "name": "[concat(parameters('vmName'), '/CustomScriptExtension')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.10",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[concat(parameters('scriptsRepositoryUrl'), '/run-all.ps1')]",
+            "[concat(parameters('scriptsRepositoryUrl'), '/install-iis-sql.ps1')]",
+            "[concat(parameters('scriptsRepositoryUrl'), '/deploy-app.ps1')]",
+            "[concat(parameters('scriptsRepositoryUrl'), '/load-db.ps1')]"
+          ]
+        },
+        "protectedSettings": {
+          "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File run-all.ps1"
+        }
       }
     }
   ],

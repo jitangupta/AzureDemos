@@ -1,7 +1,7 @@
 # PowerShell Script to Download and Deploy SplendidCRM Application
 
 # --- Configuration ---
-$repoUrl = "https://github.com/SplendidCRM/SplendidCRM-Community/archive/refs/heads/master.zip"
+$repoUrl = "https://github.com/splendidcrm/SplendidCRM-Community-Edition/archive/refs/heads/master.zip"
 $tempDir = "$env:TEMP\SplendidCRM-Deploy"
 $tempZipFile = "$tempDir\SplendidCRM.zip"
 $webRoot = "C:\inetpub\wwwroot"
