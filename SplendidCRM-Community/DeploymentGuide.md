@@ -115,7 +115,7 @@ Once the `vm.json` template is deployed, the `CustomScriptExtension` downloads a
 
 ## Verification
 
-After the deployment is complete (this may take 15-20 minutes), you can find the public IP address of your new VM in the Azure portal. Open a web browser and navigate to `http://<Your-VM-Public-IP>` to access the SplendidCRM login page.
+After the deployment is complete (this may take 15-20 minutes), you can find the public IP address of your new VM in the Azure portal. Open a web browser and navigate to `http://<Your-VM-Public-IP>/` to access the SplendidCRM login page.
 
 ## Monitoring the Installation
 

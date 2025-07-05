@@ -3,13 +3,13 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "webappSubnetId": {
-      "value": "/subscriptions/e2bd6d19-3364-4e83-a5d2-05d4404afa48/resourceGroups/rg-splendid-crm/providers/Microsoft.Network/virtualNetworks/SplendidCRM-vnet/subnets/webapp"
+      "value": "/subscriptions/e2bd6d19-..../subnets/webapp"  
     },
     "adminUsername": {
-      "value": "jitangupta"
+      "value": "your_admin_user" 
     },
     "adminPassword": {
-      "value": "Rato4945"
+      "value": "Your_Secure_P@ssw0rd!" 
     },
     "scriptsRepositoryUrl": {
       "value": "https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts"

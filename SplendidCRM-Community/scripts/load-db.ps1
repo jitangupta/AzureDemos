@@ -2,9 +2,10 @@
 
 # --- Configuration ---
 $databaseName = "SplendidCRM"
-$sqlServerInstance = ".\MSSQLSERVER" # Default instance
+$sqlServerInstance = "." # Local default instance
 $webRoot = "C:\inetpub\wwwroot"
 $dbScriptsPath = "$webRoot\db"
+$iisAppPoolUser = "IIS APPPOOL\DefaultAppPool"
 
 # --- Main Logic ---
 Write-Host "Starting database setup for SplendidCRM..."
@@ -18,13 +19,33 @@ if (-not (Test-Path -Path $dbScriptsPath)) {
 # --- Create the Database ---
 Write-Host "Creating database: $databaseName..."
 $createDbQuery = "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = N'$databaseName') CREATE DATABASE [$databaseName];"
-
-# Using -S . for local default instance
 try {
     Invoke-Sqlcmd -Query $createDbQuery -ServerInstance $sqlServerInstance -ErrorAction Stop
     Write-Host "Database '$databaseName' created or already exists."
 } catch {
     Write-Error "Failed to create database. Error: $_"
+    exit 1
+}
+
+# --- Create SQL Login for IIS App Pool ---
+Write-Host "Creating SQL Login for IIS user: '$iisAppPoolUser'..."
+$createLoginQuery = "IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = N'$iisAppPoolUser') CREATE LOGIN [$iisAppPoolUser] FROM WINDOWS;"
+try {
+    Invoke-Sqlcmd -Query $createLoginQuery -ServerInstance $sqlServerInstance -ErrorAction Stop
+    Write-Host "SQL Login for '$iisAppPoolUser' created or already exists."
+} catch {
+    Write-Error "Failed to create SQL login. Error: $_"
+    exit 1
+}
+
+# --- Grant DB Ownership to IIS App Pool ---
+Write-Host "Granting database ownership to '$iisAppPoolUser'..."
+$grantDbOwnershipQuery = "USE [$databaseName]; ALTER AUTHORIZATION ON DATABASE::[$databaseName] TO [$iisAppPoolUser];"
+try {
+    Invoke-Sqlcmd -Query $grantDbOwnershipQuery -ServerInstance $sqlServerInstance -ErrorAction Stop
+    Write-Host "Database ownership granted successfully."
+} catch {
+    Write-Error "Failed to grant database ownership. Error: $_"
     exit 1
 }
 
