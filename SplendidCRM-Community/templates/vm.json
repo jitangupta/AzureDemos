@@ -58,12 +58,11 @@
     "networkInterfaceName": "[concat(parameters('vmName'), '-nic')]",
     "osDiskName": "[concat(parameters('vmName'), '-osdisk')]",
     "imageReference": {
-      "publisher": "MicrosoftWindowsServer",
-      "offer": "WindowsServer",
-      "sku": "2019-Datacenter",
+      "publisher": "MicrosoftSQLServer",
+      "offer": "SQL2019-WS2019",
+      "sku": "SQLDEV",
       "version": "latest"
-    },
-    "jitNetworkAccessPolicyName": "default"
+    }
   },
   "resources": [
     {
@@ -146,30 +145,6 @@
             }
           ]
         }
-      }
-    },
-    {
-      "type": "Microsoft.Security/jitNetworkAccessPolicies",
-      "apiVersion": "2020-01-01",
-      "name": "[variables('jitNetworkAccessPolicyName')]",
-      "location": "[parameters('location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
-      ],
-      "properties": {
-        "virtualMachines": [
-          {
-            "id": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
-            "ports": [
-              {
-                "number": 3389,
-                "protocol": "TCP",
-                "allowedSourceAddressPrefix": "*",
-                "maxRequestAccessDuration": "PT3H"
-              }
-            ]
-          }
-        ]
       }
     },
     {

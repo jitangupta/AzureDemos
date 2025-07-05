@@ -117,6 +117,16 @@ Once the `vm.json` template is deployed, the `CustomScriptExtension` downloads a
 
 After the deployment is complete (this may take 15-20 minutes), you can find the public IP address of your new VM in the Azure portal. Open a web browser and navigate to `http://<Your-VM-Public-IP>` to access the SplendidCRM login page.
 
+## Monitoring the Installation
+
+The `Write-Host` messages from the PowerShell scripts will **not** appear in your local terminal. To see the live output and track the installation progress, follow these steps:
+
+1.  Navigate to your resource group in the [Azure Portal](https://portal.azure.com).
+2.  Once the deployment status shows the VM is created, click on the **Virtual Machine** resource.
+3.  In the VM's left-hand menu, go to **Help** > **Extensions + applications**.
+4.  You will see `CustomScriptExtension` in the list. Click on it.
+5.  A new pane will open showing the status (e.g., `Provisioning succeeded`). The detailed status message box will contain all the output from your scripts, including all the `Write-Host` messages. This is the best place to troubleshoot if something goes wrong.
+
 ## Teardown
 
 To delete all the resources created in this guide and avoid ongoing charges, simply delete the resource group.
