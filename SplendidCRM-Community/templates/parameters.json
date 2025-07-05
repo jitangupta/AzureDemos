@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "webappSubnetId": {
+      "value": "/subscriptions/e2bd6d19-3364-4e83-a5d2-05d4404afa48/resourceGroups/rg-splendid-crm/providers/Microsoft.Network/virtualNetworks/SplendidCRM-vnet/subnets/webapp"
+    },
+    "adminUsername": {
+      "value": "jitangupta"
+    },
+    "adminPassword": {
+      "value": "Rato4945"
+    },
+    "scriptsRepositoryUrl": {
+      "value": "https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts"
+    }
+  }
+}

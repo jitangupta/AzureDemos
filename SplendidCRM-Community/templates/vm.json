@@ -72,12 +72,12 @@
       "name": "[variables('publicIpAddressName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('tags')]",
+      "sku": {
+        "name": "Standard"
+      },
       "properties": {
         "publicIPAllocationMethod": "Static",
-        "publicIPAddressVersion": "IPv4",
-        "sku": {
-          "name": "Standard"
-        }
+        "publicIPAddressVersion": "IPv4"
       }
     },
     {

@@ -42,35 +42,45 @@ az deployment group create \
 
 This step provisions the Windows Server VM and automatically triggers the installation and configuration scripts after the VM is created.
 
--   **File to run:** `templates/vm.json`
--   **What it does:**
-    -   Provisions a `Standard_D2s_v3` Windows Server 2019 VM.
-    -   Creates a public IP address and a network interface for the VM.
-    -   Attaches the VM to the `webapp` subnet created in the previous step.
-    -   Enables Just-In-Time (JIT) access for RDP on port 3389 for enhanced security.
-    -   **Crucially, it uses the `CustomScriptExtension` to download and execute the PowerShell scripts from your specified GitHub repository.**
+**Deployment using a Parameter File (Recommended & Most Reliable)**
 
-**Command:**
+1.  **Get the Subnet ID:** Run the following command and copy the full ID (starting with `/subscriptions/...`) to your clipboard.
 
-First, you need the ID of the subnet from Step 1 and the URL to your scripts repository.
+    ```bash
+    az network vnet subnet show --resource-group YourResourceGroupName --vnet-name SplendidCRM-vnet --name webapp --query id -o tsv
+    ```
 
-```bash
-# Get the subnet ID
-webappSubnetId=$(az network vnet subnet show --resource-group YourResourceGroupName --vnet-name SplendidCRM-vnet --name webapp --query id -o tsv)
+2.  **Edit the Parameter File:** Open the `templates/parameters.json` file. Paste the subnet ID you just copied as the value for the `webappSubnetId` parameter. You must also choose a secure username and password.
 
-# !! IMPORTANT !!
-# Set this to the raw content URL of your scripts folder in GitHub.
-scriptsRepoUrl="https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts"
+    ```json
+    {
+      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "webappSubnetId": {
+          "value": "/subscriptions/e2bd6d19-..../subnets/webapp"  // <-- PASTE SUBNET ID HERE
+        },
+        "adminUsername": {
+          "value": "your_admin_user"  // <-- CHOOSE A USERNAME
+        },
+        "adminPassword": {
+          "value": "Your_Secure_P@ssw0rd!"  // <-- CHOOSE A STRONG PASSWORD
+        },
+        "scriptsRepositoryUrl": {
+          "value": "https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts"
+        }
+      }
+    }
+    ```
 
-# Deploy the VM
-az deployment group create \
-    --resource-group YourResourceGroupName \
-    --template-file templates/vm.json \
-    --parameters webappSubnetId=$webappSubnetId \
-                 scriptsRepositoryUrl=$scriptsRepoUrl \
-                 adminUsername=<YourAdminUsername> \
-                 adminPassword=<YourSecurePassword>
-```
+3.  **Deploy:** Run the deployment command, referencing the parameter file.
+
+    ```bash
+    az deployment group create \
+        --resource-group YourResourceGroupName \
+        --template-file templates/vm.json \
+        --parameters @templates/parameters.json
+    ```
 
 ## Automated Post-Deployment Scripts
 
