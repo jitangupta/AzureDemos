@@ -24,11 +24,11 @@ Expand-Archive -Path $tempZipFile -DestinationPath $tempDir -Force
 Write-Host "Extraction complete."
 
 # Find the actual application source folder (it's nested)
-$extractedFolder = Get-ChildItem -Path $tempDir -Directory | Select-Object -First 1
-$appSourcePath = Join-Path $extractedFolder.FullName "SplendidCRM"
+$extractedFolder = Get-ChildItem -Path $tempDir -Directory | Where-Object { $_.Name -like 'SplendidCRM-Community-Edition-*' } | Select-Object -First 1
+$appSourcePath = $extractedFolder.FullName
 
 if (-not (Test-Path $appSourcePath)) {
-    Write-Error "Could not find the nested application folder at $appSourcePath. Halting deployment."
+    Write-Error "Could not find the nested application folder. Halting deployment."
     exit 1
 }
 
@@ -44,27 +44,22 @@ Write-Host "Copying SplendidCRM files from $appSourcePath..."
 Copy-Item -Path "$appSourcePath\*" -Destination $webRoot -Recurse -Force
 
 # --- Configure Database Connection ---
-Write-Host "Updating web.config with local SQL Server connection string..."
+Write-Host "Updating web.config with local SQL Server data source..."
 $webConfigFile = Join-Path $webRoot "web.config"
 if (-not (Test-Path $webConfigFile)) {
     Write-Error "web.config not found at $webConfigFile. Halting configuration."
     exit 1
 }
 
-# Load the XML
-$xml = [xml](Get-Content $webConfigFile)
+# Load the XML content
+$configContent = Get-Content $webConfigFile -Raw
 
-# Find the connectionStrings node and the specific 'add' element
-$connStringNode = $xml.SelectSingleNode("//connectionStrings/add[@name='SplendidCRM']")
-if ($null -ne $connStringNode) {
-    # Update the connectionString attribute for local SQL Server with Windows Auth
-    $connStringNode.SetAttribute("connectionString", "server=.;database=SplendidCRM;trusted_connection=true")
-    # Save the modified XML back to the file
-    $xml.Save($webConfigFile)
-    Write-Host "web.config updated successfully."
-} else {
-    Write-Warning "Could not find the 'SplendidCRM' connection string in web.config. Application might not work."
-}
+# Replace the data source to point to the local default instance
+$newConfigContent = $configContent -replace 'data source=\(local\)\SplendidCRM', 'data source=(local)'
+
+# Save the modified content back to the file
+Set-Content -Path $webConfigFile -Value $newConfigContent
+Write-Host "web.config updated successfully."
 
 # --- Set IIS Application Pool ---
 Write-Host "Configuring IIS Application Pool..."
