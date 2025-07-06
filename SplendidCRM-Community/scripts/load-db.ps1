@@ -46,8 +46,14 @@ $arguments = @(
 )
 
 try {
-    # The SQL service must be running
-    Start-Service -Name "MSSQLSERVER" -ErrorAction SilentlyContinue
+    # Dynamically discover the SQL Server service name and ensure it is running
+    $sqlService = Get-Service -Name "MSSQL*" | Where-Object { $_.DisplayName -like "SQL Server (*)" } | Select-Object -First 1
+    if ($sqlService) {
+        Start-Service -Name $sqlService.Name -ErrorAction SilentlyContinue
+        Write-Host "Ensured SQL Service $($sqlService.Name) is running."
+    } else {
+        Write-Warning "Could not dynamically find the SQL Server service to start it."
+    }
     
     # Execute SqlPackage.exe
     Start-Process -FilePath $sqlPackagePath -ArgumentList $arguments -Wait -NoNewWindow
