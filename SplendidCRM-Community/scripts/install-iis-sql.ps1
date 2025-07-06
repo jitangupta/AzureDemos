@@ -3,25 +3,24 @@
 # --- Initialize and Format Data Disk ---
 Write-Host "Initializing and formatting the data disk..."
 try {
-    # Get the first disk that is offline and raw. This is safer than just checking for offline.
-    $disk = Get-Disk | Where-Object { $_.PartitionStyle -eq 'RAW' -and $_.IsOffline -eq $true } | Select-Object -First 1
+    # Find the first disk that is not the OS disk (Number 0) and is unpartitioned (RAW).
+    # This is a more reliable method than checking the offline status.
+    $disk = Get-Disk | Where-Object { $_.Number -gt 0 -and $_.PartitionStyle -eq 'RAW' } | Select-Object -First 1
 
     if ($disk) {
-        Write-Host "Found data disk Number $($disk.Number). Initializing..."
-        # Store the assigned drive letter
-        $driveLetter = $disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false | Select-Object -ExpandProperty DriveLetter
+        Write-Host "Found data disk Number $($disk.Number). Preparing disk..."
+        # Bring the disk online (if it's not already), initialize it, create a partition, and format it.
+        $driveLetter = $disk | Set-Disk -IsOffline $false -PassThru | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false | Select-Object -ExpandProperty DriveLetter
+        
         $global:dataPath = "${driveLetter}:\SQLData"
         $global:logPath = "${driveLetter}:\SQLLogs"
         Write-Host "Data disk prepared on drive $driveLetter. Data path: $global:dataPath"
     } else {
-        Write-Warning "No uninitialized data disk found. Assuming F: drive is already prepared."
-        # Fallback for idempotency
-        $global:dataPath = "F:\SQLData"
-        $global:logPath = "F:\SQLLogs"
+        Write-Error "No uninitialized data disk found. A raw data disk must be attached to the VM. Halting script."
+        exit 1
     }
 } catch {
     Write-Error "Failed to initialize data disk. Error: $_"
-    # If disk setup fails, we can't proceed with SQL config on it.
     exit 1
 }
 

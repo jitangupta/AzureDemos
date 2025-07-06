@@ -60,7 +60,7 @@
     "imageReference": {
       "publisher": "MicrosoftSQLServer",
       "offer": "SQL2019-WS2019",
-      "sku": "SQLWEB",
+      "sku": "standard",
       "version": "latest"
     }
   },
