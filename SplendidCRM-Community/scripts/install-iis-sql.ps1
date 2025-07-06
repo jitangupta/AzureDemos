@@ -101,50 +101,81 @@ Set-ItemProperty -Path $regKey -Name "DefaultData" -Value $global:dataPath
 Set-ItemProperty -Path $regKey -Name "DefaultLog" -Value $global:logPath
 Write-Host "SQL Server default data and log paths updated to use the data disk."
 
-# --- Set SA Password and Restart SQL Service ---
-Write-Host "Setting 'sa' password and restarting SQL Server service..."
+# --- CRITICAL FIX: Restart SQL Server FIRST to apply Mixed Mode ---
+Write-Host "Restarting SQL Server to apply Mixed Mode authentication..."
+Restart-Service -Name $sqlServiceName -Force
+Write-Host "SQL Server service restarted."
+
+# --- Wait for SQL Server to be ready after restart ---
+Write-Host "Waiting for SQL Server to be ready after restart..."
+$maxAttempts = 60
+$attempt = 0
+$sqlReady = $false
+while (-not $sqlReady -and $attempt -lt $maxAttempts) {
+    try {
+        # Try to connect using Windows Authentication first
+        Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query "SELECT 1" -QueryTimeout 5 -ErrorAction Stop
+        $sqlReady = $true
+        Write-Host "SQL Server is ready and accepting connections."
+    } catch {
+        Write-Host "SQL Server not ready yet. Retrying in 5 seconds... (Attempt $($attempt + 1)/$maxAttempts)"
+        Start-Sleep -Seconds 5
+        $attempt++
+    }
+}
+
+if (-not $sqlReady) {
+    Write-Error "SQL Server did not become ready within the expected time. Halting script."
+    exit 1
+}
+
+# --- NOW Set SA Password (after Mixed Mode is active) ---
+Write-Host "Setting 'sa' password now that Mixed Mode is active..."
 $saPassword = "splendidcrm2005" # This should be parameterized in a real scenario
 
-# Use Invoke-Sqlcmd to set the password.
+# Use Invoke-Sqlcmd to set the password with Windows Authentication
 $query = "ALTER LOGIN sa ENABLE; ALTER LOGIN sa WITH PASSWORD = '$saPassword'"
 
 try {
-    # Ensure the SQL service is running
-    Start-Service -Name $sqlServiceName -ErrorAction Stop
-
-    # Wait for SQL Server to be ready to accept connections
-    Write-Host "Waiting for SQL Server to be ready..."
-    $maxAttempts = 60
-    $attempt = 0
-    $sqlReady = $false
-    while (-not $sqlReady -and $attempt -lt $maxAttempts) {
-        try {
-            Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query "SELECT 1" -QueryTimeout 5 -ErrorAction Stop
-            $sqlReady = $true
-            Write-Host "SQL Server is ready."
-        } catch {
-            Write-Host "SQL Server not ready yet. Retrying in 5 seconds..."
-            Start-Sleep -Seconds 5
-            $attempt++
-        }
-    }
-
-    if (-not $sqlReady) {
-        Write-Error "SQL Server did not become ready within the expected time. Halting script."
-        exit 1
-    }
-
-    # Now set the 'sa' password
+    # Execute using Windows Authentication (which should still work)
     Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $query -ErrorAction Stop
     Write-Host "'sa' password has been set successfully."
 } catch {
     Write-Error "Failed to set 'sa' password. Error: $_"
-    # Even if it fails, we must restart for the changes to take effect.
+    Write-Host "This may be expected if sa login doesn't exist. Attempting to create it..."
+    
+    # Try to create the sa login if it doesn't exist
+    try {
+        $createQuery = "IF NOT EXISTS (SELECT name FROM sys.server_principals WHERE name = 'sa') CREATE LOGIN sa WITH PASSWORD = '$saPassword'; ALTER LOGIN sa ENABLE;"
+        Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $createQuery -ErrorAction Stop
+        Write-Host "'sa' login created and enabled successfully."
+    } catch {
+        Write-Warning "Could not create/enable sa login. This may not be critical for your migration. Error: $_"
+    }
 }
 
-# Restart the SQL Server service to apply all changes.
-Restart-Service -Name $sqlServiceName -Force
-Write-Host "SQL Server service has been restarted to apply all configuration changes."
+# --- Test SQL Server connectivity ---
+Write-Host "Testing SQL Server connectivity..."
+try {
+    # Test Windows Auth
+    $testQuery = "SELECT @@VERSION as SQLVersion, SERVERPROPERTY('ProductVersion') as ProductVersion"
+    $result = Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $testQuery
+    Write-Host "SQL Server Version: $($result.SQLVersion)"
+    
+    # Test Mixed Mode if sa is available
+    try {
+        $result2 = Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query "SELECT 1 as TestConnection" -Username "sa" -Password $saPassword
+        Write-Host "Mixed Mode authentication test: SUCCESS"
+    } catch {
+        Write-Warning "Mixed Mode authentication test failed, but Windows Auth works: $_"
+    }
+} catch {
+    Write-Error "SQL Server connectivity test failed: $_"
+    exit 1
+}
 
 # --- Finalizing ---
 Write-Host "Script finished. Data disk, IIS, ASP.NET 4.8, and SQL Server configuration are complete."
+Write-Host "Data Path: $global:dataPath"
+Write-Host "Log Path: $global:logPath"
+Write-Host "SQL Server is ready for SplendidCRM deployment."
