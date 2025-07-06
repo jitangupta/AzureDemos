@@ -65,8 +65,34 @@ New-Item -ItemType Directory -Path $global:dataPath -Force
 New-Item -ItemType Directory -Path $global:logPath -Force
 Write-Host "Created SQL data and log directories on the data disk."
 
+# Dynamically discover the SQL Server instance and service name
+$sqlService = Get-Service -Name "MSSQL*" | Where-Object { $_.DisplayName -like "SQL Server (*)" } | Select-Object -First 1
+if (-not $sqlService) {
+    Write-Error "Could not find the SQL Server service. Halting script."
+    exit 1
+}
+$sqlServiceName = $sqlService.Name
+
+# Robustly extract the instance name from the display name, e.g., "SQL Server (MSSQLSERVER)"
+$sqlInstanceName = ($sqlService.DisplayName -replace 'SQL Server \((.*)\)', '$1').Trim()
+
+Write-Host "Found SQL Server service: $sqlServiceName (Instance: $sqlInstanceName)"
+
+# Dynamically construct the registry path
+$instanceId = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").$sqlInstanceName
+if (-not $instanceId) {
+    Write-Error "Could not find instance ID for SQL instance '$sqlInstanceName' in the registry."
+    exit 1
+}
+$regKey = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$instanceId\MSSQLServer"
+
+if (-not (Test-Path $regKey)) {
+    Write-Error "Could not find the registry path for the SQL instance: $regKey. Halting script."
+    exit 1
+}
+Write-Host "Found SQL registry key: $regKey"
+
 # This registry key controls the authentication mode. 1 for Windows-only, 2 for Mixed-Mode.
-$regKey = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQLServer"
 Set-ItemProperty -Path $regKey -Name LoginMode -Value 2 -Force
 Write-Host "Registry updated for Mixed-Mode Authentication."
 
@@ -77,24 +103,23 @@ Write-Host "SQL Server default data and log paths updated to use the data disk."
 
 # --- Set SA Password and Restart SQL Service ---
 Write-Host "Setting 'sa' password and restarting SQL Server service..."
-$sqlInstance = "MSSQLSERVER"
 $saPassword = "splendidcrm2005" # This should be parameterized in a real scenario
 
-# Use Invoke-Sqlcmd to set the password. This is more reliable than other methods.
+# Use Invoke-Sqlcmd to set the password.
 $query = "ALTER LOGIN sa ENABLE; ALTER LOGIN sa WITH PASSWORD = '$saPassword'"
 
 try {
     # The SQL service needs to be running to set the password
-    Start-Service -Name "MSSQL`$sqlInstance"
+    Start-Service -Name $sqlServiceName
     Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $query -ErrorAction Stop
     Write-Host "'sa' password has been set successfully."
 } catch {
     Write-Error "Failed to set 'sa' password. Error: $_"
-    # Even if it fails, we must restart for the LoginMode and path changes to take effect.
+    # Even if it fails, we must restart for the changes to take effect.
 }
 
 # Restart the SQL Server service to apply all changes.
-Restart-Service -Name "MSSQL`$sqlInstance" -Force
+Restart-Service -Name $sqlServiceName -Force
 Write-Host "SQL Server service has been restarted to apply all configuration changes."
 
 # --- Finalizing ---
