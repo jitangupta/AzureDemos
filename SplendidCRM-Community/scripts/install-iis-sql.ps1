@@ -4,13 +4,23 @@
 Write-Host "Initializing and formatting the data disk..."
 try {
     # Find the first disk that is not the OS disk (Number 0) and is unpartitioned (RAW).
-    # This is a more reliable method than checking the offline status.
     $disk = Get-Disk | Where-Object { $_.Number -gt 0 -and $_.PartitionStyle -eq 'RAW' } | Select-Object -First 1
 
     if ($disk) {
         Write-Host "Found data disk Number $($disk.Number). Preparing disk..."
-        # Bring the disk online (if it's not already), initialize it, create a partition, and format it.
-        $driveLetter = $disk | Set-Disk -IsOffline $false -PassThru | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false | Select-Object -ExpandProperty DriveLetter
+        
+        # Execute commands sequentially for clarity and robustness. This avoids pipeline issues.
+        Set-Disk -Number $disk.Number -IsOffline $false
+        Initialize-Disk -Number $disk.Number -PartitionStyle GPT
+        
+        # Create the partition and get the resulting object
+        $partition = New-Partition -DiskNumber $disk.Number -AssignDriveLetter -UseMaximumSize
+        
+        # Format the volume using the drive letter, which is more robust
+        Format-Volume -DriveLetter $partition.DriveLetter -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false
+        
+        # Get the drive letter from the partition object
+        $driveLetter = $partition.DriveLetter
         
         $global:dataPath = "${driveLetter}:\SQLData"
         $global:logPath = "${driveLetter}:\SQLLogs"
