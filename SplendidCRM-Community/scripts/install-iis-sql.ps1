@@ -109,8 +109,32 @@ $saPassword = "splendidcrm2005" # This should be parameterized in a real scenari
 $query = "ALTER LOGIN sa ENABLE; ALTER LOGIN sa WITH PASSWORD = '$saPassword'"
 
 try {
-    # The SQL service needs to be running to set the password
-    Start-Service -Name $sqlServiceName
+    # Ensure the SQL service is running
+    Start-Service -Name $sqlServiceName -ErrorAction Stop
+
+    # Wait for SQL Server to be ready to accept connections
+    Write-Host "Waiting for SQL Server to be ready..."
+    $maxAttempts = 60
+    $attempt = 0
+    $sqlReady = $false
+    while (-not $sqlReady -and $attempt -lt $maxAttempts) {
+        try {
+            Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query "SELECT 1" -QueryTimeout 5 -ErrorAction Stop
+            $sqlReady = $true
+            Write-Host "SQL Server is ready."
+        } catch {
+            Write-Host "SQL Server not ready yet. Retrying in 5 seconds..."
+            Start-Sleep -Seconds 5
+            $attempt++
+        }
+    }
+
+    if (-not $sqlReady) {
+        Write-Error "SQL Server did not become ready within the expected time. Halting script."
+        exit 1
+    }
+
+    # Now set the 'sa' password
     Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $query -ErrorAction Stop
     Write-Host "'sa' password has been set successfully."
 } catch {
