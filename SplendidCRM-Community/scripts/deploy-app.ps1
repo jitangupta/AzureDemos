@@ -195,18 +195,82 @@ try {
     exit 1
 }
 
-# --- Set IIS Application Pool ---
-Write-Host "Configuring IIS Application Pool..."
+# --- Configure IIS Application and Application Pool ---
+Write-Host "Configuring IIS Application and Application Pool..."
 try {
     Import-Module WebAdministration -ErrorAction Stop
-    Set-ItemProperty -Path 'IIS:\AppPools\DefaultAppPool' -Name managedRuntimeVersion -Value "v4.0"
-    Set-ItemProperty -Path 'IIS:\AppPools\DefaultAppPool' -Name enable32BitAppOnWin64 -Value $false
     
-    # Restart the application pool to apply changes
-    Restart-WebAppPool -Name "DefaultAppPool"
-    Write-Host "IIS Application Pool configured and restarted."
+    # Create a dedicated application pool for SplendidCRM
+    $appPoolName = "SplendidCRM_AppPool"
+    
+    # Remove existing app pool if it exists
+    if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
+        Write-Host "Removing existing application pool: $appPoolName"
+        Remove-WebAppPool -Name $appPoolName
+    }
+    
+    # Create new application pool with proper settings
+    Write-Host "Creating application pool: $appPoolName"
+    New-WebAppPool -Name $appPoolName
+    
+    # Configure application pool settings for .NET 4.8
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value "v4.0"
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name enable32BitAppOnWin64 -Value $false
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processModel.identityType -Value "ApplicationPoolIdentity"
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name recycling.periodicRestart.time -Value "00:00:00"  # Disable periodic restart
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processModel.idleTimeout -Value "00:00:00"  # Disable idle timeout
+    
+    Write-Host "Application pool configured with .NET 4.0 framework."
+    
+    # Remove Default Web Site if it exists
+    if (Get-Website -Name "Default Web Site" -ErrorAction SilentlyContinue) {
+        Write-Host "Removing Default Web Site"
+        Remove-Website -Name "Default Web Site"
+    }
+    
+    # Create the SplendidCRM web application
+    $siteName = "SplendidCRM"
+    $sitePort = 80
+    
+    # Remove existing site if it exists
+    if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
+        Write-Host "Removing existing website: $siteName"
+        Remove-Website -Name $siteName
+    }
+    
+    # Create new website
+    Write-Host "Creating website: $siteName"
+    New-Website -Name $siteName -Port $sitePort -PhysicalPath $webRoot -ApplicationPool $appPoolName
+    
+    # Set proper permissions on the web directory
+    Write-Host "Setting permissions on web directory..."
+    
+    # Give IIS_IUSRS read and execute permissions
+    $acl = Get-Acl $webRoot
+    $accessRule1 = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS_IUSRS", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $acl.SetAccessRule($accessRule1)
+    
+    # Give the application pool identity modify permissions to App_Data if it exists
+    $appDataPath = Join-Path $webRoot "App_Data"
+    if (Test-Path $appDataPath) {
+        $accessRule2 = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS AppPool\$appPoolName", "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $acl.SetAccessRule($accessRule2)
+        Write-Host "Set modify permissions on App_Data folder."
+    }
+    
+    # Apply permissions
+    Set-Acl -Path $webRoot -AclObject $acl
+    Write-Host "Permissions configured successfully."
+    
+    # Start the application pool and website
+    Start-WebAppPool -Name $appPoolName
+    Start-Website -Name $siteName
+    
+    Write-Host "IIS Application and Application Pool configured successfully."
+    
 } catch {
-    Write-Warning "Could not configure IIS Application Pool: $_"
+    Write-Error "Failed to configure IIS Application: $_"
+    exit 1
 }
 
 # --- Verify Deployment ---
@@ -226,6 +290,62 @@ if ($missingFiles.Count -gt 0) {
 } else {
     Write-Host "All required files are present."
 }
+
+# --- Test Web Application ---
+Write-Host "Testing web application deployment..."
+try {
+    # Wait a moment for IIS to initialize
+    Start-Sleep -Seconds 10
+    
+    # Test if the website is responding
+    $testUrl = "http://localhost"
+    Write-Host "Testing website at: $testUrl"
+    
+    try {
+        $response = Invoke-WebRequest -Uri $testUrl -TimeoutSec 30 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            Write-Host "✓ Website is responding successfully (Status: $($response.StatusCode))"
+            
+            # Check if it's actually the SplendidCRM app
+            if ($response.Content -match "SplendidCRM|Splendid") {
+                Write-Host "✓ SplendidCRM application detected in response"
+            } else {
+                Write-Warning "Website is responding but may not be showing SplendidCRM content"
+            }
+        } else {
+            Write-Warning "Website responded with status code: $($response.StatusCode)"
+        }
+    } catch {
+        Write-Warning "Website test failed: $_"
+        Write-Host "This might be expected if the database isn't configured yet."
+    }
+    
+    # Check application pool status
+    $appPoolStatus = Get-WebAppPoolState -Name $appPoolName
+    Write-Host "Application Pool Status: $($appPoolStatus.Value)"
+    
+    # Check website status
+    $websiteStatus = Get-WebsiteState -Name $siteName
+    Write-Host "Website Status: $($websiteStatus.Value)"
+    
+} catch {
+    Write-Warning "Could not complete web application testing: $_"
+}
+
+# --- Display Configuration Summary ---
+Write-Host "`n=== DEPLOYMENT SUMMARY ===" -ForegroundColor Yellow
+Write-Host "✓ Application files deployed to: $webRoot"
+Write-Host "✓ Website Name: $siteName"
+Write-Host "✓ Application Pool: $appPoolName"
+Write-Host "✓ Website URL: http://localhost"
+Write-Host "✓ Physical Path: $webRoot"
+
+# Show important next steps
+Write-Host "`n=== NEXT STEPS ===" -ForegroundColor Cyan
+Write-Host "1. Ensure SQL Server database is restored"
+Write-Host "2. Verify database connection string in web.config"
+Write-Host "3. Test the application by browsing to http://localhost"
+Write-Host "4. Check IIS logs if any issues: C:\inetpub\logs\LogFiles\"
 
 Write-Host "Deployment script finished successfully."
 

@@ -47,14 +47,141 @@ Write-Host "Checking for and installing .NET Framework 4.8 if needed..."
 $dotnet48_url = "https://go.microsoft.com/fwlink/?linkid=2088631"
 $dotnet48_installer = "$env:TEMP\ndp48-x86-x64-allos-enu.exe"
 
-# Check if .NET 4.8 is already installed to avoid unnecessary download/install
+# Check current .NET version
 $net48Version = (Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -Name Release -ErrorAction SilentlyContinue).Release
+$currentVersion = switch ($net48Version) {
+    461808 { "4.7.2" }
+    461814 { "4.7.2" }
+    528040 { "4.8" }
+    528049 { "4.8" }
+    528372 { "4.8" }
+    528449 { "4.8" }
+    default { "Unknown ($net48Version)" }
+}
+
+Write-Host "Current .NET Framework version: $currentVersion (Release: $net48Version)"
+
 if ($net48Version -lt 528040) {
-    Invoke-WebRequest -Uri $dotnet48_url -OutFile $dotnet48_installer
-    Start-Process -FilePath $dotnet48_installer -ArgumentList "/q /norestart" -Wait
-    Write-Host ".NET Framework 4.8 installation complete."
+    Write-Host "Installing .NET Framework 4.8..."
+    
+    # Download with retry logic and size verification
+    $maxRetries = 3
+    $retryCount = 0
+    $downloadSuccess = $false
+    
+    while (-not $downloadSuccess -and $retryCount -lt $maxRetries) {
+        try {
+            Write-Host "Downloading .NET 4.8 installer (attempt $($retryCount + 1)/$maxRetries)..."
+            Invoke-WebRequest -Uri $dotnet48_url -OutFile $dotnet48_installer -TimeoutSec 600 -ErrorAction Stop
+            
+            # Verify download size (should be around 120MB)
+            $fileSize = (Get-Item $dotnet48_installer).Length
+            if ($fileSize -gt 100MB) {
+                $downloadSuccess = $true
+                Write-Host "Download complete. File size: $([math]::Round($fileSize / 1MB, 2)) MB"
+            } else {
+                throw "Downloaded file is too small ($([math]::Round($fileSize / 1MB, 2)) MB)"
+            }
+        } catch {
+            $retryCount++
+            Write-Warning "Download attempt $retryCount failed: $_"
+            if ($retryCount -lt $maxRetries) {
+                Start-Sleep -Seconds 10
+            }
+        }
+    }
+    
+    if (-not $downloadSuccess) {
+        Write-Error "Failed to download .NET 4.8 installer after $maxRetries attempts."
+        exit 1
+    }
+    
+    # Check for pending reboots that might block installation
+    Write-Host "Checking for pending reboots..."
+    $pendingReboot = $false
+    
+    # Check various registry keys for pending reboots
+    $rebootKeys = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations"
+    )
+    
+    foreach ($key in $rebootKeys) {
+        if (Test-Path $key) {
+            $pendingReboot = $true
+            Write-Warning "Pending reboot detected: $key"
+        }
+    }
+    
+    if ($pendingReboot) {
+        Write-Warning "System has pending reboots. .NET installation may fail or require a restart."
+    }
+    
+    # Install with comprehensive error handling
+    Write-Host "Installing .NET Framework 4.8. This may take several minutes..."
+    try {
+        # Use more verbose logging for troubleshooting
+        $installArgs = @("/q", "/norestart", "/log", "$env:TEMP\dotnet48_install.log")
+        $process = Start-Process -FilePath $dotnet48_installer -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
+        
+        Write-Host ".NET 4.8 installer finished with exit code: $($process.ExitCode)"
+        
+        # Check exit codes (from Microsoft documentation)
+        switch ($process.ExitCode) {
+            0 { 
+                Write-Host "✓ .NET Framework 4.8 installation completed successfully." 
+            }
+            1602 { 
+                Write-Warning "Installation was cancelled by user or another process."
+            }
+            1603 { 
+                Write-Error "A fatal error occurred during installation."
+                if (Test-Path "$env:TEMP\dotnet48_install.log") {
+                    Write-Host "Installation log:"
+                    Get-Content "$env:TEMP\dotnet48_install.log" | Select-Object -Last 20
+                }
+                exit 1
+            }
+            1641 { 
+                Write-Host "✓ Installation completed successfully. A restart is required."
+                $global:RestartRequired = $true
+            }
+            3010 { 
+                Write-Host "✓ Installation completed successfully. A restart is required."
+                $global:RestartRequired = $true
+            }
+            5100 { 
+                Write-Warning "Computer does not meet system requirements."
+                exit 1
+            }
+            default { 
+                Write-Warning "Installation completed with unexpected exit code: $($process.ExitCode)"
+            }
+        }
+        
+        # Wait a moment and verify installation
+        Start-Sleep -Seconds 5
+        $newNet48Version = (Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -Name Release -ErrorAction SilentlyContinue).Release
+        
+        if ($newNet48Version -ge 528040) {
+            Write-Host "✓ .NET Framework 4.8 installation verified successfully. (Release: $newNet48Version)"
+        } else {
+            Write-Warning "Installation may not have completed properly. Current version still shows: $newNet48Version"
+            Write-Host "This might require a system restart to complete."
+            $global:RestartRequired = $true
+        }
+        
+    } catch {
+        Write-Error "Failed to install .NET Framework 4.8: $_"
+        if (Test-Path "$env:TEMP\dotnet48_install.log") {
+            Write-Host "Installation log:"
+            Get-Content "$env:TEMP\dotnet48_install.log" | Select-Object -Last 10
+        }
+        exit 1
+    }
 } else {
-    Write-Host ".NET Framework 4.8 is already installed."
+    Write-Host "✓ .NET Framework 4.8 is already installed. (Release: $net48Version)"
 }
 
 # --- Configure SQL Server ---
@@ -174,8 +301,30 @@ try {
     exit 1
 }
 
-# --- Finalizing ---
-Write-Host "Script finished. Data disk, IIS, ASP.NET 4.8, and SQL Server configuration are complete."
-Write-Host "Data Path: $global:dataPath"
-Write-Host "Log Path: $global:logPath"
-Write-Host "SQL Server is ready for SplendidCRM deployment."
+# --- Check for Restart Requirement ---
+if ($global:RestartRequired) {
+    Write-Warning "⚠️  IMPORTANT: A system restart is required to complete .NET Framework 4.8 installation."
+    Write-Warning "   Please restart the VM and re-run any subsequent deployment scripts."
+    Write-Warning "   You can verify .NET 4.8 installation after restart with:"
+    Write-Warning "   (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').Release"
+}
+
+# --- Final Verification ---
+Write-Host "`n=== INSTALLATION SUMMARY ==="
+Write-Host "✓ Data disk configured: $global:dataPath"
+Write-Host "✓ Log path configured: $global:logPath"
+Write-Host "✓ IIS and ASP.NET features installed"
+
+$finalNet48Version = (Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -Name Release -ErrorAction SilentlyContinue).Release
+$finalVersionText = if ($finalNet48Version -ge 528040) { "4.8 ✓" } else { "4.7.x (restart may be required)" }
+Write-Host "✓ .NET Framework version: $finalVersionText"
+
+Write-Host "✓ SQL Server configured and ready"
+
+if (-not $global:RestartRequired) {
+    Write-Host "`n🎉 All installations completed successfully. Ready for application deployment."
+} else {
+    Write-Host "`n⏳ Installation complete but restart required before proceeding."
+}
+
+Write-Host "`nScript finished. Infrastructure setup complete."
