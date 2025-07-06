@@ -1,4 +1,29 @@
-# PowerShell Script to Install IIS, ASP.NET 4.8, and Configure SQL Server
+# PowerShell Script to Initialize Data Disk, Install IIS, ASP.NET 4.8, and Configure SQL Server
+
+# --- Initialize and Format Data Disk ---
+Write-Host "Initializing and formatting the data disk..."
+try {
+    # Get the first disk that is offline and raw. This is safer than just checking for offline.
+    $disk = Get-Disk | Where-Object { $_.PartitionStyle -eq 'RAW' -and $_.IsOffline -eq $true } | Select-Object -First 1
+
+    if ($disk) {
+        Write-Host "Found data disk Number $($disk.Number). Initializing..."
+        # Store the assigned drive letter
+        $driveLetter = $disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false | Select-Object -ExpandProperty DriveLetter
+        $global:dataPath = "${driveLetter}:\SQLData"
+        $global:logPath = "${driveLetter}:\SQLLogs"
+        Write-Host "Data disk prepared on drive $driveLetter. Data path: $global:dataPath"
+    } else {
+        Write-Warning "No uninitialized data disk found. Assuming F: drive is already prepared."
+        # Fallback for idempotency
+        $global:dataPath = "F:\SQLData"
+        $global:logPath = "F:\SQLLogs"
+    }
+} catch {
+    Write-Error "Failed to initialize data disk. Error: $_"
+    # If disk setup fails, we can't proceed with SQL config on it.
+    exit 1
+}
 
 # --- Install IIS and ASP.NET 4.8 ---
 Write-Host "Installing IIS and required features for ASP.NET..."
@@ -6,7 +31,6 @@ Install-WindowsFeature -Name Web-Server -IncludeManagementTools
 Install-WindowsFeature -Name Web-Asp-Net45 # Base for 4.x
 Install-WindowsFeature -Name Web-Mgmt-Console
 Install-WindowsFeature -Name Web-Scripting-Tools
-
 Write-Host "IIS and base ASP.NET features installation complete."
 
 # --- Install .NET Framework 4.8 ---
@@ -14,37 +38,55 @@ Write-Host "Checking for and installing .NET Framework 4.8 if needed..."
 $dotnet48_url = "https://go.microsoft.com/fwlink/?linkid=2088631"
 $dotnet48_installer = "$env:TEMP\ndp48-x86-x64-allos-enu.exe"
 
-Invoke-WebRequest -Uri $dotnet48_url -OutFile $dotnet48_installer
-Start-Process -FilePath $dotnet48_installer -ArgumentList "/q /norestart" -Wait
-Write-Host ".NET Framework 4.8 installation check/update complete."
+# Check if .NET 4.8 is already installed to avoid unnecessary download/install
+$net48Version = (Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -Name Release -ErrorAction SilentlyContinue).Release
+if ($net48Version -lt 528040) {
+    Invoke-WebRequest -Uri $dotnet48_url -OutFile $dotnet48_installer
+    Start-Process -FilePath $dotnet48_installer -ArgumentList "/q /norestart" -Wait
+    Write-Host ".NET Framework 4.8 installation complete."
+} else {
+    Write-Host ".NET Framework 4.8 is already installed."
+}
 
-# --- Configure SQL Server for Mixed-Mode Authentication ---
-Write-Host "Enabling SQL Server Mixed-Mode Authentication..."
+# --- Configure SQL Server ---
+Write-Host "Configuring SQL Server..."
+
+# Create the directories on the new data disk
+New-Item -ItemType Directory -Path $global:dataPath -Force
+New-Item -ItemType Directory -Path $global:logPath -Force
+Write-Host "Created SQL data and log directories on the data disk."
+
 # This registry key controls the authentication mode. 1 for Windows-only, 2 for Mixed-Mode.
 $regKey = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQLServer"
 Set-ItemProperty -Path $regKey -Name LoginMode -Value 2 -Force
 Write-Host "Registry updated for Mixed-Mode Authentication."
 
+# Update default locations for new databases
+Set-ItemProperty -Path $regKey -Name "DefaultData" -Value $global:dataPath
+Set-ItemProperty -Path $regKey -Name "DefaultLog" -Value $global:logPath
+Write-Host "SQL Server default data and log paths updated to use the data disk."
+
 # --- Set SA Password and Restart SQL Service ---
 Write-Host "Setting 'sa' password and restarting SQL Server service..."
 $sqlInstance = "MSSQLSERVER"
-$saPassword = "splendidcrm2005"
+$saPassword = "splendidcrm2005" # This should be parameterized in a real scenario
 
 # Use Invoke-Sqlcmd to set the password. This is more reliable than other methods.
-# The command needs to be run against the master database.
-$query = "ALTER LOGIN sa WITH PASSWORD = '$saPassword'"
+$query = "ALTER LOGIN sa ENABLE; ALTER LOGIN sa WITH PASSWORD = '$saPassword'"
 
 try {
+    # The SQL service needs to be running to set the password
+    Start-Service -Name "MSSQL`$sqlInstance"
     Invoke-Sqlcmd -ServerInstance "." -Database "master" -Query $query -ErrorAction Stop
     Write-Host "'sa' password has been set successfully."
 } catch {
     Write-Error "Failed to set 'sa' password. Error: $_"
-    # Even if it fails, we must restart for the LoginMode change to take effect.
+    # Even if it fails, we must restart for the LoginMode and path changes to take effect.
 }
 
-# Restart the SQL Server service to apply the authentication mode change.
-Restart-Service -Name "MSSQL`$$sqlInstance" -Force
-Write-Host "SQL Server service has been restarted."
+# Restart the SQL Server service to apply all changes.
+Restart-Service -Name "MSSQL`$sqlInstance" -Force
+Write-Host "SQL Server service has been restarted to apply all configuration changes."
 
 # --- Finalizing ---
-Write-Host "Script finished. IIS, ASP.NET 4.8, and SQL Server configuration are complete."
+Write-Host "Script finished. Data disk, IIS, ASP.NET 4.8, and SQL Server configuration are complete."

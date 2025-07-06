@@ -26,10 +26,10 @@ Provision the entire infrastructure using **ARM templates + PowerShell scripts**
   - Public IP and DNS for access
 
 - 🧱 **Bootstrapped VMs** using custom scripts:
-  - IIS installed with .NET Framework 4.x support
-  - SQL Server Developer Edition installed and configured
+  - IIS installed with .NET Framework 4.8 support
+  - SQL Server Standard Edition installed and configured
   - CRM files deployed on IIS
-  - SQL schema and seed data loaded
+  - SQL database restored from a `.bacpac` file
 
 - 🔐 **Security Configured**:
   - JIT VM access enabled for RDP
@@ -70,5 +70,5 @@ SplendidCRM-Community/
 - Azure Resource Manager (ARM)
 - PowerShell (VM bootstrapping)
 - IIS for .NET hosting
-- SQL Server Developer Edition
+- SQL Server Standard Edition
 - Azure Application Gateway (SSL)

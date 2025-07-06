@@ -95,7 +95,7 @@ Once the `vm.json` template is deployed, the `CustomScriptExtension` downloads a
     -   **Actions:**
         -   Installs Internet Information Services (IIS).
         -   Installs ASP.NET 4.8 and required IIS features.
-        -   Downloads and silently installs SQL Server 2019 Developer Edition.
+        -   Downloads and silently installs SQL Server 2019 Standard Edition.
 
 3.  **`scripts/deploy-app.ps1`**
     -   **Purpose:** Deploys the SplendidCRM application files.
@@ -109,9 +109,7 @@ Once the `vm.json` template is deployed, the `CustomScriptExtension` downloads a
 4.  **`scripts/load-db.ps1`**
     -   **Purpose:** Creates and populates the application database.
     -   **Actions:**
-        -   Creates a new database named `SplendidCRM`.
-        -   Executes the `SplendidCRM.sql` script to create the database schema.
-        -   Executes the `vwSplendidCRM_Data.sql` script to populate the database with initial data.
+        -   Restores the SplendidCRM database from a `.bacpac` file.
 
 ## Verification
 

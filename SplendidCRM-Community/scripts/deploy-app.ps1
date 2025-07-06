@@ -44,7 +44,7 @@ Write-Host "Copying SplendidCRM files from $appSourcePath..."
 Copy-Item -Path "$appSourcePath\*" -Destination $webRoot -Recurse -Force
 
 # --- Configure Database Connection ---
-Write-Host "Updating web.config with local SQL Server data source..."
+Write-Host "Updating web.config with local SQL Server connection string..."
 $webConfigFile = Join-Path $webRoot "web.config"
 if (-not (Test-Path $webConfigFile)) {
     Write-Error "web.config not found at $webConfigFile. Halting configuration."
@@ -52,14 +52,24 @@ if (-not (Test-Path $webConfigFile)) {
 }
 
 # Load the XML content
-$configContent = Get-Content $webConfigFile -Raw
+[xml]$webConfig = Get-Content $webConfigFile
 
-# Replace the data source to point to the local default instance
-$newConfigContent = $configContent -replace 'data source=\(local\)\SplendidCRM', 'data source=(local)'
+# Find the connectionStrings node and the specific add element
+$connStringNode = $webConfig.configuration.connectionStrings.add | Where-Object { $_.name -eq 'SplendidCRM' }
 
-# Save the modified content back to the file
-Set-Content -Path $webConfigFile -Value $newConfigContent
-Write-Host "web.config updated successfully."
+if ($connStringNode) {
+    # Define the new connection string
+    $newConnString = "Data Source=(local);Initial Catalog=SplendidCRM;User ID=sa;Password=splendidcrm2005"
+    
+    # Update the attribute
+    $connStringNode.connectionString = $newConnString
+    
+    # Save the modified XML back to the file
+    $webConfig.Save($webConfigFile)
+    Write-Host "web.config connection string updated successfully."
+} else {
+    Write-Warning "Could not find the 'SplendidCRM' connection string in web.config."
+}
 
 # --- Set IIS Application Pool ---
 Write-Host "Configuring IIS Application Pool..."

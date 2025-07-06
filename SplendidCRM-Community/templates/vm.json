@@ -60,7 +60,7 @@
     "imageReference": {
       "publisher": "MicrosoftSQLServer",
       "offer": "SQL2019-WS2019",
-      "sku": "SQLDEV",
+      "sku": "SQLWEB",
       "version": "latest"
     }
   },
@@ -136,7 +136,18 @@
             "managedDisk": {
               "storageAccountType": "Standard_LRS"
             }
-          }
+          },
+          "dataDisks": [
+            {
+              "lun": 0,
+              "name": "[concat(parameters('vmName'), '-datadisk')]",
+              "createOption": "Empty",
+              "diskSizeGB": "1023",
+              "managedDisk": {
+                "storageAccountType": "Standard_LRS"
+              }
+            }
+          ]
         },
         "networkProfile": {
           "networkInterfaces": [

@@ -1,65 +1,73 @@
-# PowerShell Script to Load SplendidCRM Database Schema and Data
+# PowerShell Script to Download and Restore SplendidCRM Database from a .bacpac file
 
 # --- Configuration ---
+$bacpacUrl = "https://raw.githubusercontent.com/jitangupta/AzureDemos/main/SplendidCRM-Community/scripts/SplendidCRM.bacpac" # Assumes bacpac is in the same folder
+$tempDir = "$env:TEMP\SplendidCRM-DB"
+$bacpacFile = "$tempDir\SplendidCRM.bacpac"
 $databaseName = "SplendidCRM"
 $sqlServerInstance = "." # Local default instance
-$webRoot = "C:\inetpub\wwwroot"
-$dbScriptsPath = "$webRoot\db"
-$sqlUser = "sa"
-$sqlPassword = "splendidcrm2005"
 
-# --- Main Logic ---
-Write-Host "Starting database setup for SplendidCRM..."
+# Path to SqlPackage.exe - it can vary, so we search for it.
+$sqlPackagePath = (Get-ChildItem -Path "C:\Program Files\Microsoft SQL Server" -Recurse -Filter "SqlPackage.exe").FullName | Select-Object -First 1
 
-# Check if the database scripts path exists
-if (-not (Test-Path -Path $dbScriptsPath)) {
-    Write-Error "Database scripts folder not found at $dbScriptsPath. Ensure the application is deployed first. Halting script."
+# --- Preparation ---
+Write-Host "Preparing for database restore..."
+if (Test-Path $tempDir) {
+    Remove-Item -Path $tempDir -Recurse -Force
+}
+New-Item -ItemType Directory -Path $tempDir
+
+if (-not $sqlPackagePath) {
+    Write-Error "SqlPackage.exe not found. This tool is required to restore the database. Halting script."
     exit 1
 }
+Write-Host "Found SqlPackage.exe at: $sqlPackagePath"
 
-# --- Create the Database ---
-Write-Host "Creating database: $databaseName..."
-$createDbQuery = "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = N'$databaseName') CREATE DATABASE [$databaseName];"
+# --- Download .bacpac file ---
+Write-Host "Downloading SplendidCRM.bacpac from $bacpacUrl..."
 try {
-    Invoke-Sqlcmd -Query $createDbQuery -ServerInstance $sqlServerInstance -Username $sqlUser -Password $sqlPassword -ErrorAction Stop
-    Write-Host "Database '$databaseName' created or already exists."
+    Invoke-WebRequest -Uri $bacpacUrl -OutFile $bacpacFile -ErrorAction Stop
+    Write-Host "Download complete."
 } catch {
-    Write-Error "Failed to create database. Error: $_"
+    Write-Error "Failed to download .bacpac file. Error: $_"
     exit 1
 }
 
-# --- Execute SQL Scripts ---
-# The order of execution is important: Schema first, then data.
-$schemaFile = "$dbScriptsPath\SplendidCRM.sql"
-$dataFile = "$dbScriptsPath\vwSplendidCRM_Data.sql"
+# --- Restore Database ---
+Write-Host "Restoring database '$databaseName' from .bacpac file..."
 
-if (-not (Test-Path -Path $schemaFile)) {
-    Write-Error "Schema file not found: $schemaFile. Halting script."
-    exit 1
-}
-if (-not (Test-Path -Path $dataFile)) {
-    Write-Error "Data file not found: $dataFile. Halting script."
-    exit 1
-}
+# Construct the command-line arguments for SqlPackage.exe
+$arguments = @(
+    "/a:Import",
+    "/sf:\"$bacpacFile\"",
+    "/tsn:\"$sqlServerInstance\"",
+    "/tdn:\"$databaseName\"",
+    "/p:BlockOnPossibleDataLoss=false" # Required for some restores
+)
 
-# Execute Schema Script
-Write-Host "Executing schema script: $schemaFile..."
 try {
-    Invoke-Sqlcmd -InputFile $schemaFile -ServerInstance $sqlServerInstance -Database $databaseName -Username $sqlUser -Password $sqlPassword -ErrorAction Stop
-    Write-Host "Schema script executed successfully."
+    # The SQL service must be running
+    Start-Service -Name "MSSQLSERVER" -ErrorAction SilentlyContinue
+    
+    # Execute SqlPackage.exe
+    Start-Process -FilePath $sqlPackagePath -ArgumentList $arguments -Wait -NoNewWindow
+    Write-Host "Database restore command executed."
+
+    # Verify the database exists
+    $db = Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Query "SELECT name FROM sys.databases WHERE name = '$databaseName'"
+    if ($db) {
+        Write-Host "Database '$databaseName' restored successfully."
+    } else {
+        Write-Error "Database restore failed. The database '$databaseName' was not found after the operation."
+        exit 1
+    }
 } catch {
-    Write-Error "Failed to execute schema script. Error: $_"
+    Write-Error "An error occurred during the database restore process. Error: $_"
     exit 1
 }
 
-# Execute Data Script
-Write-Host "Executing data script: $dataFile..."
-try {
-    Invoke-Sqlcmd -InputFile $dataFile -ServerInstance $sqlServerInstance -Database $databaseName -Username $sqlUser -Password $sqlPassword -ErrorAction Stop
-    Write-Host "Data script executed successfully."
-} catch {
-    Write-Error "Failed to execute data script. Error: $_"
-    exit 1
-}
+# --- Cleanup ---
+Write-Host "Cleaning up temporary files..."
+Remove-Item -Path $tempDir -Recurse -Force
 
 Write-Host "Database setup for SplendidCRM is complete."
