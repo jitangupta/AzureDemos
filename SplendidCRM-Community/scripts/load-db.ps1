@@ -1,10 +1,33 @@
 # PowerShell Script to Restore Production SplendidCRM Database from BACPAC
 # Simulates real-world lift & shift migration scenario
 
+# Function to get secure SA password (shared across scripts)
+function Get-SecureSaPassword {
+    param(
+        [string]$PasswordFile = "$env:TEMP\splendidcrm_sa_password.txt"
+    )
+    
+    # Check if password file already exists (for consistency across scripts)
+    if (Test-Path $PasswordFile) {
+        try {
+            $securePassword = Get-Content $PasswordFile | ConvertTo-SecureString
+            $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword))
+            Write-Host "Retrieved existing SA password from secure storage"
+            return $plainPassword
+        } catch {
+            Write-Warning "Could not read existing password file, using fallback: $_"
+        }
+    }
+    
+    # Fallback to default password if secure storage fails
+    Write-Warning "Using default password - this should only happen if install-iis-sql.ps1 hasn't run yet"
+    return "splendidcrm2005"
+}
+
 # --- Configuration ---
 $databaseName = "SplendidCRM"
 $sqlServerInstance = "." # Local default instance
-$saPassword = "splendidcrm2005"
+$saPassword = Get-SecureSaPassword
 $tempDir = "$env:TEMP\SplendidCRM-DB"
 
 # Production-like BACPAC sources (ordered by preference)

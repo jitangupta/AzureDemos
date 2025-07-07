@@ -1,5 +1,28 @@
 # PowerShell Script to Download and Deploy SplendidCRM Application
 
+# Function to get secure SA password (shared across scripts)
+function Get-SecureSaPassword {
+    param(
+        [string]$PasswordFile = "$env:TEMP\splendidcrm_sa_password.txt"
+    )
+    
+    # Check if password file already exists (for consistency across scripts)
+    if (Test-Path $PasswordFile) {
+        try {
+            $securePassword = Get-Content $PasswordFile | ConvertTo-SecureString
+            $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword))
+            Write-Host "Retrieved existing SA password from secure storage"
+            return $plainPassword
+        } catch {
+            Write-Warning "Could not read existing password file, using fallback: $_"
+        }
+    }
+    
+    # Fallback to default password if secure storage fails
+    Write-Warning "Using default password - this should only happen if install-iis-sql.ps1 hasn't run yet"
+    return "splendidcrm2005"
+}
+
 # --- Configuration ---
 $repoUrl = "https://github.com/splendidcrm/SplendidCRM-Community-Edition/archive/refs/heads/master.zip"
 $tempDir = "$env:TEMP\SplendidCRM-Deploy"
@@ -136,8 +159,9 @@ try {
     # Load the XML content with proper error handling
     [xml]$webConfig = Get-Content $webConfigFile -ErrorAction Stop
     
-    # Define the new connection string
-    $newConnString = "Data Source=(local);Initial Catalog=SplendidCRM;User ID=sa;Password=splendidcrm2005;Encrypt=False;TrustServerCertificate=True"
+    # Define the new connection string with secure password
+    $saPassword = Get-SecureSaPassword
+    $newConnString = "Data Source=(local);Initial Catalog=SplendidCRM;User ID=sa;Password=$saPassword;Encrypt=False;TrustServerCertificate=True"
     
     # Multiple strategies to find and update connection string
     $updated = $false
