@@ -1,0 +1,59 @@
+# Rename this file to terraform.tfvars and update with your actual values
+
+# Environment Configuration
+environment    = "prod"
+location      = "East US"
+dr_location   = "West US 2"
+
+# Application Configuration
+application_name = "chatwoot"
+cost_center     = "IT"
+domain_name     = "chatwoot.yourcompany.com"
+
+# AKS Configuration
+kubernetes_version   = "1.29"
+system_node_vm_size = "Standard_B2s"    # $30/month per node
+user_node_vm_size   = "Standard_D2s_v3"  # $80/month per node
+node_count_min      = 2
+node_count_max      = 4
+
+# Database Configuration
+postgres_sku        = "B_Standard_B1ms"  # $75/month - suitable for 100 agents
+postgres_storage_mb = 32768              # 32GB storage
+backup_retention_days = 35
+
+# Redis Configuration
+redis_capacity = 1                       # $75/month - C1 Standard
+redis_family   = "C"
+redis_sku_name = "Standard"
+
+# Security Configuration
+ssl_certificate_name = "chatwoot-ssl-cert"
+
+# Azure AD Configuration (Optional)
+# admin_group_object_id = "12345678-1234-1234-1234-123456789012"
+
+# Compliance Configuration
+log_retention_days = 365                 # SOC2 requirement
+
+# Expected Monthly Costs:
+# =====================
+# Core Infrastructure:        $495
+# - AKS Cluster:              $320
+# - PostgreSQL B1ms:          $75
+# - Redis Standard C1:        $75
+# - Storage Account:          $25
+#
+# Enterprise Security:        $440
+# - Application Gateway WAF:  $245
+# - Private Endpoints (×4):   $60
+# - Key Vault Premium:        $20
+# - Private DNS Zones:        $15
+# - Log Analytics (365d):     $100
+#
+# Operational Overhead:       $130
+# - Backup storage:           $35
+# - Egress bandwidth:         $75
+# - Container Registry:       $20
+#
+# TOTAL ESTIMATED:           ~$1,065/month

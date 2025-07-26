@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chatwoot-db-migrate
+  namespace: chatwoot
+  labels:
+    app: chatwoot-migrate
+    app.kubernetes.io/name: chatwoot
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: chatwoot-migrate
+    spec:
+      nodeSelector:
+        workload: application
+      tolerations:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+      restartPolicy: Never
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command: 
+        - sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL to be ready..."
+          until pg_isready -h $POSTGRES_HOST -p 5432 -U $POSTGRES_USER; do
+            echo "PostgreSQL is not ready. Waiting..."
+            sleep 5
+          done
+          echo "PostgreSQL is ready!"
+        env:
+        - name: POSTGRES_HOST
+          value: "psql-chatwoot-prod.postgres.database.azure.com"
+        - name: POSTGRES_USER
+          value: "chatwoot"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: postgres-password
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Redis to be ready..."
+          until redis-cli -h $REDIS_HOST -p 6380 --tls ping; do
+            echo "Redis is not ready. Waiting..."
+            sleep 5
+          done
+          echo "Redis is ready!"
+        env:
+        - name: REDIS_HOST
+          value: "redis-chatwoot-prod.redis.cache.windows.net"
+      containers:
+      - name: chatwoot-migrate
+        image: chatwoot/chatwoot:latest
+        command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+        env:
+        - name: RAILS_ENV
+          value: "production"
+        - name: NODE_ENV
+          value: "production"
+        - name: INSTALLATION_ENV
+          value: "docker"
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: secret-key-base
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: postgres-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: redis-url
+        - name: RAILS_LOG_TO_STDOUT
+          value: "true"
+        - name: LOG_LEVEL
+          value: "info"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"

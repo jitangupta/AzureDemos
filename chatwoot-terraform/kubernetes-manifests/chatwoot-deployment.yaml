@@ -1,0 +1,200 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatwoot-web
+  namespace: chatwoot
+  labels:
+    app: chatwoot-web
+    app.kubernetes.io/name: chatwoot
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chatwoot-web
+  template:
+    metadata:
+      labels:
+        app: chatwoot-web
+        app.kubernetes.io/name: chatwoot
+        app.kubernetes.io/component: web
+    spec:
+      nodeSelector:
+        workload: application
+      tolerations:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+      containers:
+      - name: chatwoot
+        image: chatwoot/chatwoot:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: RAILS_ENV
+          value: "production"
+        - name: NODE_ENV
+          value: "production"
+        - name: INSTALLATION_ENV
+          value: "docker"
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: secret-key-base
+        - name: FRONTEND_URL
+          value: "https://chatwoot.yourcompany.com"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: postgres-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: redis-url
+        - name: ACTIVE_STORAGE_SERVICE
+          value: "azure"
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: storage-account-name
+        - name: AZURE_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: storage-access-key
+        - name: AZURE_STORAGE_CONTAINER
+          value: "uploads"
+        - name: RAILS_LOG_TO_STDOUT
+          value: "true"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: RAILS_MAX_THREADS
+          value: "5"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatwoot-worker
+  namespace: chatwoot
+  labels:
+    app: chatwoot-worker
+    app.kubernetes.io/name: chatwoot
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chatwoot-worker
+  template:
+    metadata:
+      labels:
+        app: chatwoot-worker
+        app.kubernetes.io/name: chatwoot
+        app.kubernetes.io/component: worker
+    spec:
+      nodeSelector:
+        workload: application
+      tolerations:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+      containers:
+      - name: chatwoot-worker
+        image: chatwoot/chatwoot:latest
+        command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+        env:
+        - name: RAILS_ENV
+          value: "production"
+        - name: NODE_ENV
+          value: "production"
+        - name: INSTALLATION_ENV
+          value: "docker"
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: secret-key-base
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: postgres-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: redis-url
+        - name: ACTIVE_STORAGE_SERVICE
+          value: "azure"
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: storage-account-name
+        - name: AZURE_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chatwoot-secrets
+              key: storage-access-key
+        - name: AZURE_STORAGE_CONTAINER
+          value: "uploads"
+        - name: RAILS_LOG_TO_STDOUT
+          value: "true"
+        - name: LOG_LEVEL
+          value: "info"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatwoot-web-service
+  namespace: chatwoot
+  labels:
+    app: chatwoot-web
+    app.kubernetes.io/name: chatwoot
+    app.kubernetes.io/component: web
+spec:
+  selector:
+    app: chatwoot-web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP

@@ -1,3 +1,84 @@
-# Exclude SplendidCRM-Community phase2 folder
-SplendidCRM-Community/phase2/
-SplendidCRM-Community/Instructions.md
+*/GEMINI.md
+*/CLAUDE.md
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Terraform variable files (may contain secrets)
+*.tfvars
+!terraform.tfvars.example
+!**/terraform.tfvars.example
+
+# Terraform directories
+.terraform/
+**/.terraform/
+.terraform.lock.hcl
+**/.terraform.lock.hcl
+
+# Crash log files
+crash.log
+crash.*.log
+**/crash.log
+**/crash.*.log
+
+# Exclude all .tfplan files except .tfplan.example
+*.tfplan
+!*.tfplan.example
+**/*.tfplan
+!**/*.tfplan.example
+
+# Ignore override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Azure CLI
+.azure/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# General
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node modules (if you have any JS/TS in demos)
+node_modules/
+**/node_modules/
+
+# Python (if you have any Python demos)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
