@@ -68,6 +68,11 @@ variable "private_endpoints_subnet_id" {
   type        = string
 }
 
+variable "postgres_subnet_id" {
+  description = "ID of the PostgreSQL subnet"
+  type        = string
+}
+
 variable "postgres_private_dns_zone_id" {
   description = "ID of the PostgreSQL private DNS zone"
   type        = string

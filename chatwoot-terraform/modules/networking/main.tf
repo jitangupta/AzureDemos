@@ -29,6 +29,24 @@ resource "azurerm_subnet" "private_endpoints" {
   address_prefixes     = ["10.1.3.0/24"]
 }
 
+# Separate subnet for PostgreSQL Flexible Server (requires delegation)
+resource "azurerm_subnet" "postgres" {
+  name                 = "snet-postgres"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.1.5.0/24"]
+
+  delegation {
+    name = "fs"
+    service_delegation {
+      name = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = [
+        "Microsoft.Network/virtualNetworks/subnets/join/action",
+      ]
+    }
+  }
+}
+
 resource "azurerm_subnet" "application_gateway" {
   name                 = "snet-application-gateway"
   resource_group_name  = var.resource_group_name

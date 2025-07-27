@@ -162,8 +162,8 @@ resource "azurerm_role_assignment" "agic_contributor" {
 # Network Contributor role for AGIC on Application Gateway subnet
 data "azurerm_subnet" "application_gateway" {
   name                 = "snet-application-gateway"
-  virtual_network_name = split("/", var.application_gateway_id)[8]
-  resource_group_name  = split("/", var.application_gateway_id)[4]
+  virtual_network_name = var.virtual_network_name
+  resource_group_name  = var.network_resource_group_name
 }
 
 resource "azurerm_role_assignment" "agic_network_contributor" {

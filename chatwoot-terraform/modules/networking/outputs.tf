@@ -23,6 +23,11 @@ output "private_endpoints_subnet_id" {
   value       = azurerm_subnet.private_endpoints.id
 }
 
+output "postgres_subnet_id" {
+  description = "ID of the PostgreSQL subnet"
+  value       = azurerm_subnet.postgres.id
+}
+
 output "application_gateway_subnet_id" {
   description = "ID of the application gateway subnet"
   value       = azurerm_subnet.application_gateway.id

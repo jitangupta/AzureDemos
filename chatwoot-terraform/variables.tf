@@ -19,7 +19,7 @@ variable "dr_location" {
 variable "kubernetes_version" {
   description = "Kubernetes version for AKS cluster"
   type        = string
-  default     = "1.29"
+  default     = "1.30.12"
 }
 
 variable "node_count_min" {

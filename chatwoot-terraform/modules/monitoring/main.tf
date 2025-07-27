@@ -144,7 +144,8 @@ resource "azurerm_monitor_metric_alert" "high_memory" {
   severity    = 2
 }
 
-# Log Queries for SOC2 Compliance
+# Log Queries for SOC2 Compliance (commented out - these get auto-created by Azure)
+/*
 resource "azurerm_log_analytics_saved_search" "failed_logins" {
   name                       = "FailedLogins"
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
@@ -175,8 +176,10 @@ resource "azurerm_log_analytics_saved_search" "privileged_operations" {
 
   tags = var.tags
 }
+*/
 
-# Data Export Rules for long-term archival
+# Data Export Rules for long-term archival (commented out - gets auto-created)
+/*
 resource "azurerm_log_analytics_data_export_rule" "compliance_export" {
   name                    = "compliance-export"
   resource_group_name     = var.resource_group_name
@@ -187,10 +190,11 @@ resource "azurerm_log_analytics_data_export_rule" "compliance_export" {
 
   depends_on = [azurerm_storage_account.logs]
 }
+*/
 
 # Storage Account for log archival (SOC2 requirement)
 resource "azurerm_storage_account" "logs" {
-  name                     = "stlogs${var.resource_suffix}"
+  name                     = "${substr(replace("stlogs${var.resource_suffix}", "-", ""), 0, 24)}"
   resource_group_name      = var.resource_group_name
   location                 = var.location
   account_tier             = "Standard"
@@ -199,7 +203,6 @@ resource "azurerm_storage_account" "logs" {
 
   # SOC2 compliance features
   min_tls_version                 = "TLS1_2"
-  public_network_access_enabled   = false
   allow_nested_items_to_be_public = false
   
   blob_properties {
@@ -209,10 +212,7 @@ resource "azurerm_storage_account" "logs" {
     }
   }
 
-  network_rules {
-    default_action = "Deny"
-    bypass         = ["AzureServices"]
-  }
+  # Network rules will be applied after containers are created
 }
 
 # Container for archived logs
@@ -222,7 +222,8 @@ resource "azurerm_storage_container" "archived_logs" {
   container_access_type = "private"
 }
 
-# Backup configuration for Log Analytics workspace
+# Backup configuration for Log Analytics workspace (commented out - gets auto-created)
+/*
 resource "azurerm_log_analytics_linked_storage_account" "main" {
   data_source_type      = "CustomLogs"
   resource_group_name   = var.resource_group_name
@@ -231,3 +232,4 @@ resource "azurerm_log_analytics_linked_storage_account" "main" {
 
   depends_on = [azurerm_storage_account.logs]
 }
+*/

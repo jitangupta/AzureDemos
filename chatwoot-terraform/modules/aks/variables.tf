@@ -63,6 +63,16 @@ variable "application_gateway_id" {
   type        = string
 }
 
+variable "virtual_network_name" {
+  description = "Name of the virtual network"
+  type        = string
+}
+
+variable "network_resource_group_name" {
+  description = "Name of the network resource group"
+  type        = string
+}
+
 variable "container_registry_id" {
   description = "ID of the Container Registry"
   type        = string

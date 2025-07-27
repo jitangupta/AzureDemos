@@ -109,6 +109,7 @@ module "data" {
   # Network dependencies
   virtual_network_id           = module.networking.virtual_network_id
   private_endpoints_subnet_id  = module.networking.private_endpoints_subnet_id
+  postgres_subnet_id           = module.networking.postgres_subnet_id
   postgres_private_dns_zone_id = module.networking.postgres_private_dns_zone_id
   storage_private_dns_zone_id  = module.networking.storage_private_dns_zone_id
 
@@ -134,9 +135,11 @@ module "aks" {
   node_count_max      = var.node_count_max
 
   # Network dependencies
-  system_subnet_id       = module.networking.aks_system_subnet_id
-  user_subnet_id         = module.networking.aks_user_subnet_id
-  application_gateway_id = module.networking.application_gateway_id
+  system_subnet_id            = module.networking.aks_system_subnet_id
+  user_subnet_id              = module.networking.aks_user_subnet_id
+  application_gateway_id      = module.networking.application_gateway_id
+  virtual_network_name        = module.networking.virtual_network_name
+  network_resource_group_name = azurerm_resource_group.network.name
 
   # Security dependencies
   container_registry_id = module.security.container_registry_id

@@ -28,6 +28,7 @@ output "container_registry_login_server" {
   value       = azurerm_container_registry.main.login_server
 }
 
+/*
 output "ssl_certificate_secret_id" {
   description = "Secret ID of the SSL certificate"
   value       = azurerm_key_vault_certificate.ssl_cert.secret_id
@@ -37,3 +38,4 @@ output "ssl_certificate_name" {
   description = "Name of the SSL certificate"
   value       = azurerm_key_vault_certificate.ssl_cert.name
 }
+*/
